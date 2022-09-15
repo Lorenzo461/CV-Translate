@@ -1,0 +1,14 @@
+{
+  "files": {
+    "main.css": "/cv-translate/static/css/main.e4f93faf.css",
+    "main.js": "/cv-translate/static/js/main.204f1478.js",
+    "static/media/log.png": "/cv-translate/static/media/log.3e10325a271d4b8d471f.png",
+    "index.html": "/cv-translate/index.html",
+    "main.e4f93faf.css.map": "/cv-translate/static/css/main.e4f93faf.css.map",
+    "main.204f1478.js.map": "/cv-translate/static/js/main.204f1478.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e4f93faf.css",
+    "static/js/main.204f1478.js"
+  ]
+}
