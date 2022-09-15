@@ -1,4 +1,5 @@
 import Navbar from './screens/Navbar';
+import Header from './screens/Header';
 import Button from './components/Button';
 import logo from './img/log.png';
 import './App.css'
@@ -20,6 +21,7 @@ function App() {
           <img src={logo} alt="tranlsate" />
         </div>
       </div>
+      <Header/>
     </div>
   );
 }
