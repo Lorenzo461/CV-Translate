@@ -1,0 +1,11 @@
+.container-body{
+    width: 100%;
+    height: auto;
+    background-color: #282b8f;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+/*#f2f5f7*/

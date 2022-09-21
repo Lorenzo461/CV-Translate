@@ -15,7 +15,7 @@ function App() {
           dai una svolta alla tua vita.<br />
           Lavora in tutto il mondo senza limiti!
           </h2>
-          <Button text="Traduci CV"/>
+          <Button text="Traduci il tuo CV"/>
         </div>
         <div className='due'>
           <img src={logo} alt="tranlsate" />
