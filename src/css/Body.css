@@ -1,11 +1,10 @@
 .container-body{
     width: 100%;
     height: auto;
-    background-color: #282b8f;
-    color: white;
+    background-color: #f2f5f7;
     display: flex;
-    justify-content: center;
+    justify-content: space-around;
     align-items: center;
-    flex-direction: column;
+    flex-direction: row;
 }
 /*#f2f5f7*/

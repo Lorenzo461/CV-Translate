@@ -1,6 +1,7 @@
 import Navbar from './screens/Navbar';
 import Header from './screens/Header';
 import Button from './components/Button';
+import Body from './screens/Body';
 import logo from './img/log.png';
 import './App.css'
 
@@ -22,6 +23,7 @@ function App() {
         </div>
       </div>
       <Header/>
+      <Body/>
     </div>
   );
 }
