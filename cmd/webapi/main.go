@@ -1,13 +1,13 @@
 /*
-webapi è il punto di ingresso del backend WASAText.
+webapi avvia un server HTTP locale.
 
-Costruisce il router descritto da doc/api.yaml e avvia il server HTTP, che
-viene spento in modo pulito alla ricezione di SIGINT o SIGTERM. I dati sono
-tenuti in memoria: l'entrypoint non apre né configura alcun database.
+Usa esclusivamente la libreria standard di Go: nessuna dipendenza esterna e
+nessuna persistenza. Il server espone due rotte di servizio e si spegne in
+modo pulito alla ricezione di SIGINT (Ctrl+C) o SIGTERM.
 
 Utilizzo:
 
-	go run ./cmd/webapi [--api-host :3000]
+	go run ./cmd/webapi [--addr :3000]
 */
 package main
 
@@ -16,61 +16,57 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/sirupsen/logrus"
-
-	"github.com/Lorenzo461/CV-Translate/service/api"
-	"github.com/Lorenzo461/CV-Translate/service/database"
 )
 
 func main() {
 	if err := run(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "fatal error: %v\n", err)
+		log.Printf("errore fatale: %v", err)
 		os.Exit(1)
 	}
 }
 
 func run() error {
-	apiHost := flag.String("api-host", ":3000", "indirizzo di ascolto del server HTTP")
+	addr := flag.String("addr", ":3000", "indirizzo di ascolto del server HTTP")
 	flag.Parse()
 
-	logger := logrus.New()
-	logger.SetOutput(os.Stdout)
-	logger.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
-	logger.SetLevel(logrus.InfoLevel)
-	logger.Info("avvio di WASAText")
+	// Le rotte sono registrate su un ServeMux della libreria standard.
+	// Da Go 1.22 il pattern può indicare anche il metodo HTTP.
+	mux := http.NewServeMux()
 
-	// Store in memoria: nessuna risorsa esterna da aprire o chiudere.
-	router, err := api.New(api.Config{
-		Logger:   logger,
-		Database: database.NewInMemory(),
+	mux.HandleFunc("GET /liveness", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
 	})
-	if err != nil {
-		return fmt.Errorf("error building the API router: %w", err)
-	}
-	defer func() {
-		if err := router.Close(); err != nil {
-			logger.WithError(err).Error("errore nella chiusura del router")
+
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		// ServeMux instrada su "GET /" qualsiasi percorso non registrato:
+		// distinguiamo la home dalle rotte inesistenti.
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
 		}
-	}()
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = fmt.Fprintln(w, "WASAText: server attivo")
+	})
 
 	server := &http.Server{
-		Addr:              *apiHost,
-		Handler:           router.Handler(),
+		Addr:              *addr,
+		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
 	}
 
-	// Avvio del server e attesa di un segnale di terminazione.
+	// Il server gira in una goroutine, così main resta libero di attendere
+	// il segnale di terminazione.
 	serverErrors := make(chan error, 1)
 	go func() {
-		logger.WithField("addr", server.Addr).Info("server HTTP in ascolto")
+		log.Printf("server in ascolto su %s", server.Addr)
 		serverErrors <- server.ListenAndServe()
 	}()
 
@@ -80,21 +76,21 @@ func run() error {
 	select {
 	case err := <-serverErrors:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("error starting the HTTP server: %w", err)
+			return fmt.Errorf("errore nell'avvio del server: %w", err)
 		}
 	case sig := <-shutdown:
-		logger.WithField("signal", sig.String()).Info("spegnimento in corso")
+		log.Printf("ricevuto il segnale %s: spegnimento in corso", sig)
 
+		// Diamo alle richieste in corso 10 secondi per concludersi.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		if err := server.Shutdown(ctx); err != nil {
-			// Lo spegnimento pulito non è riuscito entro il timeout.
 			_ = server.Close()
-			return fmt.Errorf("error shutting down the HTTP server: %w", err)
+			return fmt.Errorf("errore nello spegnimento del server: %w", err)
 		}
 	}
 
-	logger.Info("arrivederci")
+	log.Print("arrivederci")
 	return nil
 }
