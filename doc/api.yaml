@@ -3,11 +3,10 @@ openapi: 3.0.3
 info:
   title: WASAText API
   description: |-
-    API del progetto WASAText: un clone semplificato di WhatsApp Web.
-    Permette di autenticarsi, gestire il proprio profilo, elencare e aprire
-    conversazioni (private e di gruppo), inviare/inoltrare/eliminare messaggi,
-    reagire ai messaggi con un commento e gestire i gruppi.
-  version: 1.0.0
+    API del progetto WASAText, un clone semplificato di WhatsApp Web.
+    Questa prima versione copre l'autenticazione semplificata e la gestione
+    del nome utente del profilo autenticato.
+  version: 0.1.0
   contact:
     name: WASAText
     email: wasatext@example.com
@@ -21,19 +20,10 @@ tags:
     description: Autenticazione semplificata
   - name: user
     description: Gestione del profilo dell'utente autenticato
-  - name: conversation
-    description: Elenco e dettaglio delle conversazioni
-  - name: message
-    description: Invio, inoltro, commento ed eliminazione dei messaggi
-  - name: group
-    description: Gestione dei gruppi
 
 security:
   - bearerAuth: []
 
-#############################################################################
-# PATHS
-#############################################################################
 paths:
 
   /session:
@@ -52,6 +42,7 @@ paths:
           application/json:
             schema:
               type: object
+              title: LoginRequest
               description: Credenziali di accesso
               properties:
                 name:
@@ -64,6 +55,7 @@ paths:
             application/json:
               schema:
                 type: object
+                title: LoginResponse
                 description: Identificativo dell'utente autenticato
                 properties:
                   identifier:
@@ -77,7 +69,9 @@ paths:
       tags: ["user"]
       operationId: setMyUserName
       summary: Aggiorna il proprio nome utente
-      description: Sostituisce il nome utente dell'utente autenticato con quello indicato.
+      description: |-
+        Sostituisce il nome utente dell'utente autenticato con quello indicato.
+        Il nome utente deve restare univoco all'interno del sistema.
       requestBody:
         description: Nuovo nome utente
         required: true
@@ -85,6 +79,7 @@ paths:
           application/json:
             schema:
               type: object
+              title: ChangeUsernameRequest
               description: Richiesta di cambio nome utente
               properties:
                 name:
@@ -105,339 +100,6 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/InternalServerError" }
 
-  /users/me/photo:
-    put:
-      tags: ["user"]
-      operationId: setMyPhoto
-      summary: Aggiorna la propria foto profilo
-      description: Carica una nuova immagine di profilo per l'utente autenticato.
-      requestBody:
-        description: Contenuto binario dell'immagine
-        required: true
-        content:
-          image/png:
-            schema: { $ref: "#/components/schemas/Photo" }
-          image/jpeg:
-            schema: { $ref: "#/components/schemas/Photo" }
-      responses:
-        "200":
-          description: Foto profilo aggiornata
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/User" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "413":
-          description: Immagine troppo grande
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-  /users/me/conversations:
-    get:
-      tags: ["conversation"]
-      operationId: getMyConversations
-      summary: Elenca le proprie conversazioni
-      description: |-
-        Restituisce l'elenco delle conversazioni dell'utente autenticato,
-        ordinate per data dell'ultimo messaggio (dalla più recente).
-        Ogni elemento contiene nome e foto della controparte (o del gruppo),
-        data/ora e anteprima dell'ultimo messaggio.
-      responses:
-        "200":
-          description: Elenco delle conversazioni
-          content:
-            application/json:
-              schema:
-                type: array
-                description: Conversazioni dell'utente autenticato
-                minItems: 0
-                maxItems: 1000
-                items: { $ref: "#/components/schemas/ConversationPreview" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-  /users/me/conversations/{conversationId}:
-    parameters:
-      - $ref: "#/components/parameters/ConversationId"
-    get:
-      tags: ["conversation"]
-      operationId: getConversation
-      summary: Apre una conversazione
-      description: |-
-        Restituisce il dettaglio di una conversazione con l'intero elenco dei
-        messaggi in ordine cronologico, comprensivi di stato di consegna/lettura
-        e dei commenti (reaction) associati.
-      responses:
-        "200":
-          description: Dettaglio della conversazione
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Conversation" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-  /users/me/conversations/{conversationId}/messages:
-    parameters:
-      - $ref: "#/components/parameters/ConversationId"
-    post:
-      tags: ["message"]
-      operationId: sendMessage
-      summary: Invia un messaggio nella conversazione
-      description: |-
-        Invia un nuovo messaggio (testo oppure immagine) nella conversazione
-        indicata. Se `replyTo` è valorizzato il messaggio è una risposta a un
-        messaggio già presente nella stessa conversazione.
-      requestBody:
-        description: Contenuto del messaggio da inviare
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/NewMessage" }
-      responses:
-        "201":
-          description: Messaggio inviato
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Message" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-  /users/me/conversations/{conversationId}/messages/{messageId}:
-    parameters:
-      - $ref: "#/components/parameters/ConversationId"
-      - $ref: "#/components/parameters/MessageId"
-    delete:
-      tags: ["message"]
-      operationId: deleteMessage
-      summary: Elimina un proprio messaggio
-      description: |-
-        Elimina definitivamente un messaggio inviato dall'utente autenticato.
-        Solo il mittente può eliminare il messaggio.
-      responses:
-        "204":
-          description: Messaggio eliminato
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-  /users/me/conversations/{conversationId}/messages/{messageId}/forward:
-    parameters:
-      - $ref: "#/components/parameters/ConversationId"
-      - $ref: "#/components/parameters/MessageId"
-    post:
-      tags: ["message"]
-      operationId: forwardMessage
-      summary: Inoltra un messaggio in un'altra conversazione
-      description: |-
-        Crea una copia del messaggio indicato nella conversazione di
-        destinazione. Il nuovo messaggio risulta inviato dall'utente
-        autenticato e marcato come inoltrato.
-      requestBody:
-        description: Conversazione di destinazione dell'inoltro
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              description: Destinazione dell'inoltro
-              properties:
-                targetConversationId:
-                  $ref: "#/components/schemas/Identifier"
-              required: ["targetConversationId"]
-      responses:
-        "201":
-          description: Messaggio inoltrato
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Message" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-  /users/me/conversations/{conversationId}/messages/{messageId}/comment:
-    parameters:
-      - $ref: "#/components/parameters/ConversationId"
-      - $ref: "#/components/parameters/MessageId"
-    put:
-      tags: ["message"]
-      operationId: commentMessage
-      summary: Commenta (reaction) un messaggio
-      description: |-
-        Aggiunge o sostituisce la reaction dell'utente autenticato sul
-        messaggio indicato. Ogni utente può avere al massimo un commento per
-        messaggio: l'operazione è idempotente.
-      requestBody:
-        description: Emoticon da associare al messaggio
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              description: Richiesta di commento
-              properties:
-                content:
-                  $ref: "#/components/schemas/Emoji"
-              required: ["content"]
-      responses:
-        "200":
-          description: Commento aggiunto o aggiornato
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Comment" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-    delete:
-      tags: ["message"]
-      operationId: uncommentMessage
-      summary: Rimuove il proprio commento da un messaggio
-      description: Elimina la reaction inserita dall'utente autenticato sul messaggio indicato.
-      responses:
-        "204":
-          description: Commento rimosso
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-  /groups/{groupId}/members:
-    parameters:
-      - $ref: "#/components/parameters/GroupId"
-    post:
-      tags: ["group"]
-      operationId: addToGroup
-      summary: Aggiunge un utente al gruppo
-      description: |-
-        Aggiunge l'utente indicato al gruppo. Solo un membro del gruppo può
-        aggiungere altri utenti; non è previsto alcun invito da accettare.
-      requestBody:
-        description: Utente da aggiungere al gruppo
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              description: Richiesta di aggiunta al gruppo
-              properties:
-                userId:
-                  $ref: "#/components/schemas/Identifier"
-              required: ["userId"]
-      responses:
-        "201":
-          description: Utente aggiunto al gruppo
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Group" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409":
-          description: L'utente fa già parte del gruppo
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-  /groups/{groupId}/members/me:
-    parameters:
-      - $ref: "#/components/parameters/GroupId"
-    delete:
-      tags: ["group"]
-      operationId: leaveGroup
-      summary: Abbandona il gruppo
-      description: |-
-        Rimuove l'utente autenticato dal gruppo. La conversazione di gruppo non
-        compare più tra le sue conversazioni, mentre i messaggi già inviati
-        restano visibili agli altri membri.
-      responses:
-        "204":
-          description: Gruppo abbandonato
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-  /groups/{groupId}/name:
-    parameters:
-      - $ref: "#/components/parameters/GroupId"
-    put:
-      tags: ["group"]
-      operationId: setGroupName
-      summary: Aggiorna il nome del gruppo
-      description: Modifica il nome del gruppo; l'operazione è consentita ai soli membri.
-      requestBody:
-        description: Nuovo nome del gruppo
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              description: Richiesta di cambio nome del gruppo
-              properties:
-                name:
-                  $ref: "#/components/schemas/GroupName"
-              required: ["name"]
-      responses:
-        "200":
-          description: Nome del gruppo aggiornato
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Group" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-  /groups/{groupId}/photo:
-    parameters:
-      - $ref: "#/components/parameters/GroupId"
-    put:
-      tags: ["group"]
-      operationId: setGroupPhoto
-      summary: Aggiorna la foto del gruppo
-      description: Carica una nuova immagine per il gruppo; l'operazione è consentita ai soli membri.
-      requestBody:
-        description: Contenuto binario dell'immagine
-        required: true
-        content:
-          image/png:
-            schema: { $ref: "#/components/schemas/Photo" }
-          image/jpeg:
-            schema: { $ref: "#/components/schemas/Photo" }
-      responses:
-        "200":
-          description: Foto del gruppo aggiornata
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Group" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "413":
-          description: Immagine troppo grande
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        "500": { $ref: "#/components/responses/InternalServerError" }
-
-#############################################################################
-# COMPONENTS
-#############################################################################
 components:
 
   securitySchemes:
@@ -449,26 +111,6 @@ components:
         `Authorization: Bearer <identifier>` è l'identificativo utente
         restituito da `doLogin`.
 
-  parameters:
-    ConversationId:
-      name: conversationId
-      in: path
-      required: true
-      description: Identificativo della conversazione
-      schema: { $ref: "#/components/schemas/Identifier" }
-    MessageId:
-      name: messageId
-      in: path
-      required: true
-      description: Identificativo del messaggio
-      schema: { $ref: "#/components/schemas/Identifier" }
-    GroupId:
-      name: groupId
-      in: path
-      required: true
-      description: Identificativo del gruppo (coincide con quello della conversazione di gruppo)
-      schema: { $ref: "#/components/schemas/Identifier" }
-
   responses:
     BadRequest:
       description: Richiesta malformata o parametri non validi
@@ -477,16 +119,6 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     Unauthorized:
       description: Token di autenticazione mancante o non valido
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
-    Forbidden:
-      description: L'utente non è autorizzato a eseguire l'operazione
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
-    NotFound:
-      description: Risorsa non trovata
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -516,69 +148,15 @@ components:
       maxLength: 16
       example: maria_rossi
 
-    GroupName:
-      title: GroupName
-      description: Nome visualizzato di un gruppo
-      type: string
-      pattern: '^[^\n\r]{1,32}$'
-      minLength: 1
-      maxLength: 32
-      example: Progetto WASA
-
-    Photo:
-      title: Photo
-      description: Contenuto binario di un'immagine (PNG o JPEG), massimo 4 MiB
-      type: string
-      format: binary
-      minLength: 1
-      maxLength: 4194304
-
     PhotoUrl:
       title: PhotoUrl
-      description: URL da cui scaricare l'immagine; assente se non impostata
+      description: URL da cui scaricare la foto profilo; assente se non impostata
       type: string
       format: uri
       pattern: '^https?://.*$'
       minLength: 8
       maxLength: 2048
       example: http://localhost:3000/media/photos/42.png
-
-    Emoji:
-      title: Emoji
-      description: Emoticon usata come commento (reaction) a un messaggio
-      type: string
-      pattern: '^\S{1,8}$'
-      minLength: 1
-      maxLength: 8
-      example: "👍"
-
-    MessageText:
-      title: MessageText
-      description: Contenuto testuale di un messaggio
-      type: string
-      pattern: '^[\s\S]{1,4096}$'
-      minLength: 1
-      maxLength: 4096
-      example: Ci vediamo domani in aula!
-
-    Timestamp:
-      title: Timestamp
-      description: Data e ora in formato RFC 3339 (UTC)
-      type: string
-      format: date-time
-      minLength: 20
-      maxLength: 40
-      example: "2026-09-22T10:30:00Z"
-
-    MessageStatus:
-      title: MessageStatus
-      description: |-
-        Stato di recapito del messaggio inviato dall'utente autenticato:
-        `sent` (una spunta), `received` (consegnato a tutti i destinatari),
-        `read` (letto da tutti i destinatari).
-      type: string
-      enum: ["sent", "received", "read"]
-      example: read
 
     User:
       title: User
@@ -589,128 +167,6 @@ components:
         name: { $ref: "#/components/schemas/Username" }
         photoUrl: { $ref: "#/components/schemas/PhotoUrl" }
       required: ["identifier", "name"]
-
-    Group:
-      title: Group
-      description: Gruppo e relativi membri
-      type: object
-      properties:
-        identifier: { $ref: "#/components/schemas/Identifier" }
-        name: { $ref: "#/components/schemas/GroupName" }
-        photoUrl: { $ref: "#/components/schemas/PhotoUrl" }
-        members:
-          type: array
-          description: Membri correnti del gruppo
-          minItems: 1
-          maxItems: 256
-          items: { $ref: "#/components/schemas/User" }
-      required: ["identifier", "name", "members"]
-
-    Comment:
-      title: Comment
-      description: Commento (reaction) apposto da un utente su un messaggio
-      type: object
-      properties:
-        identifier: { $ref: "#/components/schemas/Identifier" }
-        messageId: { $ref: "#/components/schemas/Identifier" }
-        author: { $ref: "#/components/schemas/User" }
-        content: { $ref: "#/components/schemas/Emoji" }
-        timestamp: { $ref: "#/components/schemas/Timestamp" }
-      required: ["identifier", "messageId", "author", "content", "timestamp"]
-
-    NewMessage:
-      title: NewMessage
-      description: |-
-        Messaggio da inviare: deve contenere `text` oppure `photo`
-        (immagine codificata in base64), mai entrambi.
-      type: object
-      properties:
-        text: { $ref: "#/components/schemas/MessageText" }
-        photo:
-          type: string
-          format: byte
-          description: Immagine allegata, codificata in base64 (massimo 4 MiB)
-          minLength: 1
-          maxLength: 5592405
-        replyTo: { $ref: "#/components/schemas/Identifier" }
-
-    Message:
-      title: Message
-      description: Messaggio presente in una conversazione
-      type: object
-      properties:
-        identifier: { $ref: "#/components/schemas/Identifier" }
-        conversationId: { $ref: "#/components/schemas/Identifier" }
-        sender: { $ref: "#/components/schemas/User" }
-        text: { $ref: "#/components/schemas/MessageText" }
-        photoUrl: { $ref: "#/components/schemas/PhotoUrl" }
-        timestamp: { $ref: "#/components/schemas/Timestamp" }
-        status: { $ref: "#/components/schemas/MessageStatus" }
-        forwarded:
-          type: boolean
-          description: Indica se il messaggio è stato inoltrato da un'altra conversazione
-          example: false
-        replyTo: { $ref: "#/components/schemas/Identifier" }
-        comments:
-          type: array
-          description: Commenti (reaction) associati al messaggio
-          minItems: 0
-          maxItems: 256
-          items: { $ref: "#/components/schemas/Comment" }
-      required: ["identifier", "conversationId", "sender", "timestamp", "status", "forwarded"]
-
-    ConversationPreview:
-      title: ConversationPreview
-      description: Riga dell'elenco conversazioni, con anteprima dell'ultimo messaggio
-      type: object
-      properties:
-        identifier: { $ref: "#/components/schemas/Identifier" }
-        name:
-          type: string
-          description: Nome dell'interlocutore (chat privata) o del gruppo
-          pattern: '^[^\n\r]{1,32}$'
-          minLength: 1
-          maxLength: 32
-          example: Progetto WASA
-        photoUrl: { $ref: "#/components/schemas/PhotoUrl" }
-        isGroup:
-          type: boolean
-          description: Vero se la conversazione è di gruppo
-          example: true
-        lastMessage: { $ref: "#/components/schemas/Message" }
-      required: ["identifier", "name", "isGroup"]
-
-    Conversation:
-      title: Conversation
-      description: Conversazione completa con tutti i suoi messaggi
-      type: object
-      properties:
-        identifier: { $ref: "#/components/schemas/Identifier" }
-        name:
-          type: string
-          description: Nome dell'interlocutore (chat privata) o del gruppo
-          pattern: '^[^\n\r]{1,32}$'
-          minLength: 1
-          maxLength: 32
-          example: Progetto WASA
-        photoUrl: { $ref: "#/components/schemas/PhotoUrl" }
-        isGroup:
-          type: boolean
-          description: Vero se la conversazione è di gruppo
-          example: true
-        participants:
-          type: array
-          description: Partecipanti alla conversazione
-          minItems: 1
-          maxItems: 256
-          items: { $ref: "#/components/schemas/User" }
-        messages:
-          type: array
-          description: Messaggi in ordine cronologico crescente
-          minItems: 0
-          maxItems: 1000
-          items: { $ref: "#/components/schemas/Message" }
-      required: ["identifier", "name", "isGroup", "participants", "messages"]
 
     Error:
       title: Error
@@ -723,12 +179,12 @@ components:
           pattern: '^[a-z_]{3,32}$'
           minLength: 3
           maxLength: 32
-          example: not_found
+          example: bad_request
         message:
           type: string
           description: Messaggio leggibile che descrive l'errore
           pattern: '^[^\n\r]{1,256}$'
           minLength: 1
           maxLength: 256
-          example: conversazione non trovata
+          example: nome utente non valido
       required: ["code", "message"]
