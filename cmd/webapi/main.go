@@ -1,19 +1,18 @@
 /*
 webapi è il punto di ingresso del backend WASAText.
 
-Apre il database SQLite, costruisce il router descritto da doc/api.yaml e
-avvia il server HTTP, che viene spento in modo pulito alla ricezione di
-SIGINT o SIGTERM.
+Costruisce il router descritto da doc/api.yaml e avvia il server HTTP, che
+viene spento in modo pulito alla ricezione di SIGINT o SIGTERM. I dati sono
+tenuti in memoria: l'entrypoint non apre né configura alcun database.
 
 Utilizzo:
 
-	go run ./cmd/webapi [--api-host :3000] [--db-filename ./wasatext.db]
+	go run ./cmd/webapi [--api-host :3000]
 */
 package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -24,8 +23,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/Lorenzo461/CV-Translate/service/api"
 	"github.com/Lorenzo461/CV-Translate/service/database"
@@ -40,7 +37,6 @@ func main() {
 
 func run() error {
 	apiHost := flag.String("api-host", ":3000", "indirizzo di ascolto del server HTTP")
-	dbFilename := flag.String("db-filename", "./wasatext.db", "percorso del file SQLite")
 	flag.Parse()
 
 	logger := logrus.New()
@@ -49,25 +45,11 @@ func run() error {
 	logger.SetLevel(logrus.InfoLevel)
 	logger.Info("avvio di WASAText")
 
-	// Database
-	logger.WithField("filename", *dbFilename).Info("apertura del database")
-	dbConn, err := sql.Open("sqlite3", *dbFilename+"?_foreign_keys=on")
-	if err != nil {
-		return fmt.Errorf("error opening the SQLite database: %w", err)
-	}
-	defer func() {
-		if err := dbConn.Close(); err != nil {
-			logger.WithError(err).Error("errore nella chiusura del database")
-		}
-	}()
-
-	db, err := database.New(dbConn)
-	if err != nil {
-		return fmt.Errorf("error building the AppDatabase: %w", err)
-	}
-
-	// Router
-	router, err := api.New(api.Config{Logger: logger, Database: db})
+	// Store in memoria: nessuna risorsa esterna da aprire o chiudere.
+	router, err := api.New(api.Config{
+		Logger:   logger,
+		Database: database.NewInMemory(),
+	})
 	if err != nil {
 		return fmt.Errorf("error building the API router: %w", err)
 	}
