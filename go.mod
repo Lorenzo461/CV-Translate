@@ -1,6 +1,8 @@
 module github.com/Lorenzo461/CV-Translate
 
-go 1.24.7
+go 1.23
+
+toolchain go1.24.7
 
 require (
 	github.com/gofrs/uuid v4.4.0+incompatible
