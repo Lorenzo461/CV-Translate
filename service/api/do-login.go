@@ -2,11 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
-
-	"github.com/julienschmidt/httprouter"
-
-	"github.com/Lorenzo461/CV-Translate/service/api/reqcontext"
 )
 
 // doLogin implementa l'operazione `doLogin` della specifica OpenAPI.
@@ -15,11 +13,23 @@ import (
 //
 // Se l'utente esiste ne restituisce l'identificativo, altrimenti lo crea.
 // Risposte dichiarate: 201, 400, 500.
-func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
+func (rt *Router) doLogin(w http.ResponseWriter, r *http.Request) {
+	if !methodIs(w, r, http.MethodPost) {
+		return
+	}
+
 	// requestBody (application/json, required: true) -> LoginRequest
 	var body LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		ctx.Logger.WithError(err).Warn("doLogin: corpo della richiesta non decodificabile")
+	decoder := json.NewDecoder(io.LimitReader(r.Body, maxRequestBody))
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(&body); err != nil {
+		rt.logger.Printf("doLogin: corpo della richiesta non valido: %v", err)
+
+		if errors.Is(err, io.EOF) {
+			writeError(w, http.StatusBadRequest, codeBadRequest, "corpo della richiesta mancante")
+			return
+		}
 		writeError(w, http.StatusBadRequest, codeBadRequest, "corpo della richiesta non valido")
 		return
 	}
@@ -31,11 +41,11 @@ func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, ps httprouter
 		return
 	}
 
-	identifier, err := rt.db.DoLogin(body.Name)
-	if err != nil {
-		ctx.Logger.WithError(err).Error("doLogin: errore durante il login")
-		writeError(w, http.StatusInternalServerError, codeInternalError, "errore interno")
-		return
+	identifier, created := rt.users.login(body.Name)
+	if created {
+		rt.logger.Printf("doLogin: creato l'utente %q con identificativo %d", body.Name, identifier)
+	} else {
+		rt.logger.Printf("doLogin: accesso dell'utente %q (identificativo %d)", body.Name, identifier)
 	}
 
 	// Risposta 201 -> LoginResponse

@@ -1,9 +1,10 @@
 /*
-webapi avvia un server HTTP locale.
+webapi è il punto di ingresso del backend WASAText.
 
-Usa esclusivamente la libreria standard di Go: nessuna dipendenza esterna e
-nessuna persistenza. Il server espone due rotte di servizio e si spegne in
-modo pulito alla ricezione di SIGINT (Ctrl+C) o SIGTERM.
+Usa esclusivamente la libreria standard di Go e non apre alcun database: si
+limita a costruire il router del package service/api e ad avviare il server
+HTTP, che si spegne in modo pulito alla ricezione di SIGINT (Ctrl+C) o
+SIGTERM.
 
 Utilizzo:
 
@@ -23,6 +24,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/Lorenzo461/CV-Translate/service/api"
 )
 
 func main() {
@@ -36,18 +39,15 @@ func run() error {
 	addr := flag.String("addr", ":3000", "indirizzo di ascolto del server HTTP")
 	flag.Parse()
 
-	// I pattern sono solo percorsi, senza il metodo HTTP davanti: quella forma
-	// richiede Go 1.22 e su versioni precedenti verrebbe interpretata come un
-	// nome di host, facendo rispondere 404 a ogni richiesta. Il metodo lo
-	// controlliamo dentro l'handler, così il server funziona con qualsiasi
-	// versione di Go.
-	mux := http.NewServeMux()
-	mux.HandleFunc("/liveness", handleLiveness)
-	mux.HandleFunc("/", handleRoot)
+	logger := log.New(os.Stdout, "", log.LstdFlags)
+
+	// Le rotte vivono nel package service/api: main non le conosce, si limita
+	// a costruire il router e a passarne l'handler al server.
+	router := api.New(api.Config{Logger: logger})
 
 	server := &http.Server{
 		Addr:              *addr,
-		Handler:           logRequests(mux),
+		Handler:           logRequests(logger, router.Handler()),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
@@ -57,7 +57,7 @@ func run() error {
 	// il segnale di terminazione.
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("server in ascolto su %s", browserURL(*addr))
+		logger.Printf("server in ascolto su %s", browserURL(*addr))
 		serverErrors <- server.ListenAndServe()
 	}()
 
@@ -70,7 +70,7 @@ func run() error {
 			return fmt.Errorf("errore nell'avvio del server: %w", err)
 		}
 	case sig := <-shutdown:
-		log.Printf("ricevuto il segnale %s: spegnimento in corso", sig)
+		logger.Printf("ricevuto il segnale %s: spegnimento in corso", sig)
 
 		// Diamo alle richieste in corso 10 secondi per concludersi.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -82,43 +82,15 @@ func run() error {
 		}
 	}
 
-	log.Print("arrivederci")
+	logger.Print("arrivederci")
 	return nil
 }
 
-// handleRoot risponde sulla radice del sito.
-func handleRoot(w http.ResponseWriter, r *http.Request) {
-	// Il pattern "/" raccoglie ogni percorso non registrato altrove:
-	// distinguiamo la radice dalle rotte inesistenti.
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
-		http.Error(w, "metodo non consentito", http.StatusMethodNotAllowed)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = fmt.Fprintln(w, "WASAText: server attivo")
-}
-
-// handleLiveness segnala che il server è in grado di rispondere.
-func handleLiveness(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
-		http.Error(w, "metodo non consentito", http.StatusMethodNotAllowed)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // logRequests stampa una riga per ogni richiesta ricevuta: durante lo sviluppo
-// dice subito se il browser sta davvero arrivando al server.
-func logRequests(next http.Handler) http.Handler {
+// dice subito se il client sta davvero arrivando al server.
+func logRequests(logger *log.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s da %s", r.Method, r.URL.Path, r.RemoteAddr)
+		logger.Printf("%s %s da %s", r.Method, r.URL.Path, r.RemoteAddr)
 		next.ServeHTTP(w, r)
 	})
 }

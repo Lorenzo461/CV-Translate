@@ -8,10 +8,9 @@ import (
 // Codici simbolici usati nel campo `code` dello schema Error. Rispettano il
 // pattern `^[a-z_]{3,32}$` dichiarato in doc/api.yaml.
 const (
-	codeBadRequest    = "bad_request"
-	codeUnauthorized  = "unauthorized"
-	codeConflict      = "conflict"
-	codeInternalError = "internal_error"
+	codeBadRequest       = "bad_request"
+	codeNotFound         = "not_found"
+	codeMethodNotAllowed = "method_not_allowed"
 )
 
 // writeJSON serializza il corpo della risposta con il codice di stato indicato.
@@ -25,4 +24,15 @@ func writeJSON(w http.ResponseWriter, status int, body interface{}) {
 // writeError produce una risposta conforme allo schema Error.
 func writeError(w http.ResponseWriter, status int, code string, message string) {
 	writeJSON(w, status, Error{Code: code, Message: message})
+}
+
+// methodIs verifica il metodo HTTP della richiesta. Se non corrisponde
+// risponde 405 e restituisce false, così l'handler può uscire subito.
+func methodIs(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method == method {
+		return true
+	}
+	w.Header().Set("Allow", method)
+	writeError(w, http.StatusMethodNotAllowed, codeMethodNotAllowed, "metodo non consentito")
+	return false
 }
